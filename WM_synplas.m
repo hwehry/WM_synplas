@@ -1,7 +1,7 @@
 
 
 clear all;
-tic 
+tic
 
 % simulation params
 dt=0.01;
@@ -22,7 +22,7 @@ p = 5; % # of memories
 c = 0.2; %connection prob
 Ne=1000; %8000 excitatory
 Ni=250;  %250 inhibitory
-Je0=23.10;%23.10; % mV mean external drives 
+Je0=23.10;%23.10; % mV mean external drives
 Ji0=21.0;%21.0; %mV must add random noise to both
 J0std = sqrt(1);
 
@@ -41,12 +41,12 @@ tau_f= 1500; %recovery time of utilization factor
 tau_d= 200; %recovery time of synaptic resources
 
 %selective stimulation
-Tcue=350; %duration 
+Tcue=350; %duration
 Acue=1.15; %contrast factor
 
 % reactivating signals
 Treact = 250;
-Areact = 1.05; 
+Areact = 1.05;
 Tperiodic = 100; %duration of periodic reactivating signal
 Pperiodic = 250; %period of periodic reactivating signal
 Aperiodic = 1.075; %contrast factor
@@ -70,7 +70,7 @@ cEE(cEE_t< p)=1;
 EEs = f*Ne; % selective
 EEn = Ne-p*EEs; % # non-selective
 Jnn = rand(EEn);
-Jnn(Jnn > gamma0) = Jb; 
+Jnn(Jnn > gamma0) = Jb;
 Jnn(Jnn < gamma0) = Jp;
 Jns = ones(EEs*p,EEn).*Jb;
 Jsn = Jns';
@@ -83,13 +83,13 @@ Jee = blkdiag(Jss,Jnn)+fliplr(blkdiag(Jns,Jsn));
 
 
 %E to I
-cIE=zeros(Ne,Ni);
-cIE_t=rand(Ne,Ni);
+cIE=zeros(Ni,Ne);
+cIE_t=rand(Ni,Ne);
 cIE(cIE_t<p)=1;
 
 %I to E
-cEI=zeros(Ni,Ne);
-cEI_t=rand(Ni,Ne);
+cEI=zeros(Ne,Ni);
+cEI_t=rand(Ne,Ni);
 cEI(cEI_t<p)=1;
 
 %I to I
@@ -103,19 +103,16 @@ Vi=Vri + (Vt-Vri).*rand(Ni,1);
 u = zeros(Ne,1);
 x = zeros(Ne,1);
 
-spke=zeros(Ne,1);
-kickei=zeros(Ne,1);
-kickie=zeros(Ni,1);
-kickii=zeros(Ni,1);
-    
-D = round((rand(Ne+Ni)*4+1)*100,0); %round to .01
+Dee = round((rand(Ne)*4+1)*100,0); %round to .01
+Die = round((rand(Ni,Ne)*4+1)*100,0); %round to .01
+Dei = round((rand(Ne,Ni)*4+1)*100,0); %round to .01
+Dii = round((rand(Ni)*4+1)*100,0); %round to .01
+
 delayidx = 5/.01+1;
 udelay = zeros(Ne,delayidx);
 xdelay = zeros(Ne,delayidx);
-eedelay = zeros(Ne,delayidx);
-eidelay = zeros(Ne,delayidx);
-iedelay = zeros(Ni,delayidx);
-iidelay = zeros(Ni,delayidx);
+edelay = zeros(Ne,delayidx);
+idelay = zeros(Ni,delayidx);
 
 % spiketime arrays
 maxspk=100000;
@@ -130,76 +127,42 @@ counti=1;
 storeu = zeros(steps,1);
 storex = zeros(steps,1);
 storev = zeros(steps,1);
-
-
-
+storev(1,1) = Ve(1);
 
 % time loop
 for t=[dt:dt:T]
     
-% zero the interactions from the last step
-
-    
-    % work out delay
-    spke = eedelay(:,1);
-    kickei = eidelay(:,1);
-    kickie = iedelay(:,1);
-    kickii = iidelay(:,1);
-    
-    eedelay(:,2:delayidx) = eedelay(:,1:delayidx-1);
-    eidelay(:,2:delayidx) = eidelay(:,1:delayidx-1);
-    iedelay(:,2:delayidx) = iedelay(:,1:delayidx-1);
-    iidelay(:,2:delayidx) = iidelay(:,1:delayidx-1);
-
-    
-    index_spke=find(Ve>=Vt);  %find spikers
-    spke = (Ve>=Vt);
-    
-    if (~isempty(index_spke))
-    spktime_e(counte:counte+length(index_spke)-1)=t; %update arrays
-    spkindex_e(counte:counte+length(index_spke)-1)=index_spke; %update arrays
-    Ve(index_spke)=Vre;  %reset
-    counte=counte+length(index_spke)+1;
-    end
-    
-    index_spki=find(Vi>=Vt);
-    
-    if (~isempty(index_spki))
-    spktime_i(counti:counti+length(index_spki)-1)=t;
-    spkindex_i(counti:counti+length(index_spki)-1)=index_spki;
-    Vi(index_spki)=Vri;
-    counti=counti+length(index_spki)+1;
-    end
-    
-    for j=1:length(index_spke) %update kick arrays
-%      
-%         
-%         
-%         %need to edit this part because it matters which e gives what spike
-%        kickee_index=find(cEE(index_spke(j),:)>0);
-%        kickee(kickee_index)=kickee(kickee_index)+1;
-%        
-       kickie_index=find(cIE(index_spke(j),:)>0);
-       kickie(kickie_index)=kickie(kickie_index)+1;         
-   end    
-    
-    for j=1:length(index_spki)
+    edelay(:,2:delayidx) = edelay(:,1:delayidx-1);
+    idelay(:,2:delayidx) = idelay(:,1:delayidx-1);
      
-       kickei_index=find(cEI(index_spki(j),:)>0);
-       kickei(kickei_index)=kickei(kickei_index)+1;
-       
-       kickii_index=find(cII(index_spki(j),:)>0);
-       kickii(kickii_index)=kickii(kickii_index)+1;
+    spke = Ve>=Vt;
+    index_spke=find(spke);  %find spikers
         
-    end 
-
-    % work out delay
-    eedelay(:,1) = spke; 
-    eidelay(:,1) = kickei;
-    iedelay(:,1) = kickie;
-    iidelay(:,1) = kickii;
+    if (~isempty(index_spke))
+        spktime_e(counte:counte+length(index_spke)-1)=t; %update arrays
+        spkindex_e(counte:counte+length(index_spke)-1)=index_spke; %update arrays
+        Ve(index_spke)=Vre;  %reset
+        counte=counte+length(index_spke)+1;
+    end
     
-% %     if T <= 350
+    spki = Vi>=Vt;
+    index_spki=find(spki);
+       
+    if (~isempty(index_spki))
+        spktime_i(counti:counti+length(index_spki)-1)=t;
+        spkindex_i(counti:counti+length(index_spki)-1)=index_spki;
+        Vi(index_spki)=Vri;
+        counti=counti+length(index_spki)+1;
+    end
+    
+
+   
+    edelay(:,1) = spke;
+    idelay(:,1) = spki;
+    
+    
+    
+    % %     if T <= 350
     % vector of presynaptic 'calcium' and 'neurotransmitter'
     u = udelay(:,1);
     udelay(:,2:delayidx) = udelay(:,1:delayidx-1);
@@ -210,33 +173,54 @@ for t=[dt:dt:T]
     xdelay(:,1) = x+dt/tau_d.*(1-x)-dt*u.*x.*spke;
     xdelay(xdelay(:,1)<0,1) = 0; %flatten to zero
     
+    % E Cells Presynaptic
     %presynaptic neuron j
     for j = 1:Ne
         % postsynaptic neuron i
         for i = 1:Ne
-            uee(i,j) = udelay(j,D(i,j)); % because zero delay is idx 1
-            xee(i,j) = xdelay(j,D(i,j));
-            kee(i,j) = eedelay(j,D(i,j));
+            uee(i,j) = udelay(j,Dee(i,j)+1); % because zero delay is idx 1
+            xee(i,j) = xdelay(j,Dee(i,j)+1);
+            kee(i,j) = edelay(j,Dee(i,j)+1);
+        end
+        for i = 1:Ni
+            kie(i,j) = edelay(j,Die(i,j)+1);
         end
     end
+    
+    %I Cells Presynaptic
+    %presynaptic neuron j
+    for j = 1:Ni
+        % postsynaptic neuron i
+        for i = 1:Ne
+            kei(i,j) = idelay(j,Dei(i,j)+1);
+        end
+        for i = 1:Ni
+            kii(i,j) = idelay(j,Dii(i,j)+1);
+        end
+    end
+    
     Jhat = Jee.*uee.*xee.*cEE;
-    Irec = sum(Jhat*kee,2);
+    Irecee = sum(Jhat.*kee,2);
+    Irecie = sum(Jie.*cIE.*kie,2);
+    Irecei = sum(Jei.*cEI.*kei,2);
+    Irecii = sum(Jii.*cII.*kii,2);
     
-    %column is pre
-%     idx=floor(t/dt);
-%     storeu(idx) = u(1);
-%     storex(idx) = x(1);
-
-       
-    Ve=Ve+Jee*spke-Jei*kickei;  %spike interaction 
-    Vi=Vi+Jie*kickie-Jii*kickii;  
+        idx=floor(t/dt);
+        storeu(idx) = u(1);
+        storex(idx) = x(1);
     
-    Ve=Ve+dt/tau_mE*(-Ve+Je0+J0std*rand(Ne,1));  %E membrane integration 
+    
+    Ve=Ve+Irecee-Irecei;  %spike interaction
+    Vi=Vi+Irecie-Irecii;
+    
+    Ve=Ve+dt/tau_mE*(-Ve+Je0+J0std*rand(Ne,1));  %E membrane integration
     Vi=Vi+dt/tau_mI*(-Vi+Ji0+J0std*rand(Ni,1));  %I membrane integration
-   
+    
     storev(idx) = Ve(1);
-
-end 
+    
+    progress = t/T;
+    disp(progress);
+end
 
 toc
 
