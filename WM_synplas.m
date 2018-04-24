@@ -103,7 +103,7 @@ Vi=Vri + (Vt-Vri).*rand(Ni,1);
 u = zeros(Ne,1);
 x = zeros(Ne,1);
 
-kickee=zeros(Ne,1);
+spke=zeros(Ne,1);
 kickei=zeros(Ne,1);
 kickie=zeros(Ni,1);
 kickii=zeros(Ni,1);
@@ -141,7 +141,7 @@ for t=[dt:dt:T]
 
     
     % work out delay
-    kickee = eedelay(:,1);
+    spke = eedelay(:,1);
     kickei = eidelay(:,1);
     kickie = iedelay(:,1);
     kickii = iidelay(:,1);
@@ -171,7 +171,7 @@ for t=[dt:dt:T]
     counti=counti+length(index_spki)+1;
     end
     
-%     for j=1:length(index_spke) %update kick arrays
+    for j=1:length(index_spke) %update kick arrays
 %      
 %         
 %         
@@ -179,10 +179,9 @@ for t=[dt:dt:T]
 %        kickee_index=find(cEE(index_spke(j),:)>0);
 %        kickee(kickee_index)=kickee(kickee_index)+1;
 %        
-%        kickie_index=find(cIE(index_spke(j),:)>0);
-%        kickie(kickie_index)=kickie(kickie_index)+1;
-%         
-%    end    
+       kickie_index=find(cIE(index_spke(j),:)>0);
+       kickie(kickie_index)=kickie(kickie_index)+1;         
+   end    
     
     for j=1:length(index_spki)
      
@@ -229,7 +228,7 @@ for t=[dt:dt:T]
 %     storex(idx) = x(1);
 
        
-    Ve=Ve+Jee*kickee-Jei*kickei;  %spike interaction 
+    Ve=Ve+Jee*spke-Jei*kickei;  %spike interaction 
     Vi=Vi+Jie*kickie-Jii*kickii;  
     
     Ve=Ve+dt/tau_mE*(-Ve+Je0+J0std*rand(Ne,1));  %E membrane integration 
