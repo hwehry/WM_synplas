@@ -102,10 +102,20 @@ Ve=Vre + (Vt-Vre).*rand(Ne,1);
 Vi=Vri + (Vt-Vri).*rand(Ni,1);
 u = zeros(Ne,1);
 x = zeros(Ne,1);
-D = rand(Ne+Ni)*4+1;
-delayidx = 5/.01;
-udelay = zeros(Ne,5/.01);
-xdelay = zeros(Ne,5/.01);
+
+kickee=zeros(Ne,1);
+kickei=zeros(Ne,1);
+kickie=zeros(Ni,1);
+kickii=zeros(Ni,1);
+    
+D = round((rand(Ne+Ni)*4+1)*100,0); %round to .01
+delayidx = 5/.01+1;
+udelay = zeros(Ne,delayidx);
+xdelay = zeros(Ne,delayidx);
+eedelay = zeros(Ne,delayidx);
+eidelay = zeros(Ne,delayidx);
+iedelay = zeros(Ni,delayidx);
+iidelay = zeros(Ni,delayidx);
 
 % spiketime arrays
 maxspk=100000;
@@ -121,16 +131,29 @@ storeu = zeros(steps,1);
 storex = zeros(steps,1);
 storev = zeros(steps,1);
 
+
+
+
 % time loop
 for t=[dt:dt:T]
     
 % zero the interactions from the last step
-    kickee=zeros(Ne,1);
-    kickei=zeros(Ne,1);
-    kickie=zeros(Ni,1);
-    kickii=zeros(Ni,1);
+
+    
+    % work out delay
+    kickee = eedelay(:,1);
+    kickei = eidelay(:,1);
+    kickie = iedelay(:,1);
+    kickii = iidelay(:,1);
+    
+    eedelay(:,2:delayidx) = eedelay(:,1:delayidx-1);
+    eidelay(:,2:delayidx) = eidelay(:,1:delayidx-1);
+    iedelay(:,2:delayidx) = iedelay(:,1:delayidx-1);
+    iidelay(:,2:delayidx) = iidelay(:,1:delayidx-1);
+
     
     index_spke=find(Ve>=Vt);  %find spikers
+    spke = (Ve>=Vt);
     
     if (~isempty(index_spke))
     spktime_e(counte:counte+length(index_spke)-1)=t; %update arrays
@@ -148,15 +171,18 @@ for t=[dt:dt:T]
     counti=counti+length(index_spki)+1;
     end
     
-    for j=1:length(index_spke) %update kick arrays
-     
-       kickee_index=find(cEE(index_spke(j),:)>0);
-       kickee(kickee_index)=kickee(kickee_index)+1;
-       
-       kickie_index=find(cIE(index_spke(j),:)>0);
-       kickie(kickie_index)=kickie(kickie_index)+1;
-        
-    end    
+%     for j=1:length(index_spke) %update kick arrays
+%      
+%         
+%         
+%         %need to edit this part because it matters which e gives what spike
+%        kickee_index=find(cEE(index_spke(j),:)>0);
+%        kickee(kickee_index)=kickee(kickee_index)+1;
+%        
+%        kickie_index=find(cIE(index_spke(j),:)>0);
+%        kickie(kickie_index)=kickie(kickie_index)+1;
+%         
+%    end    
     
     for j=1:length(index_spki)
      
@@ -168,14 +194,34 @@ for t=[dt:dt:T]
         
     end 
 
+    % work out delay
+    eedelay(:,1) = spke; 
+    eidelay(:,1) = kickei;
+    iedelay(:,1) = kickie;
+    iidelay(:,1) = kickii;
     
 % %     if T <= 350
     % vector of presynaptic 'calcium' and 'neurotransmitter'
     u = udelay(:,1);
     udelay(:,2:delayidx) = udelay(:,1:delayidx-1);
-    udelay(:,1) = u+dt/tau_f.*(U-u)+dt*U.*(1-u).*kickee;
-    x = x+dt/tau_d.*(1-x)-dt*u.*x.*kickee;
-    Jhat = Jee*u*x;
+    udelay(:,1) = u+dt/tau_f.*(U-u)+dt*U.*(1-u).*spke;
+    
+    x = xdelay(:,1);
+    xdelay(:,2:delayidx) = xdelay(:,1:delayidx-1);
+    xdelay(:,1) = x+dt/tau_d.*(1-x)-dt*u.*x.*spke;
+    xdelay(xdelay(:,1)<0,1) = 0; %flatten to zero
+    
+    %presynaptic neuron j
+    for j = 1:Ne
+        % postsynaptic neuron i
+        for i = 1:Ne
+            uee(i,j) = udelay(j,D(i,j)); % because zero delay is idx 1
+            xee(i,j) = xdelay(j,D(i,j));
+            kee(i,j) = eedelay(j,D(i,j));
+        end
+    end
+    Jhat = Jee.*uee.*xee.*cEE;
+    Irec = sum(Jhat*kee,2);
     
     %column is pre
 %     idx=floor(t/dt);
