@@ -13,7 +13,7 @@ Vt=20;  %threshold
 Vre = 16;
 Vri = 13;
 tau_mE = 15; %ms for E
-tau_mI = 5; %10 ms for I
+tau_mI = 10; %10 ms for I
 tau_arp = 2; %ms for both E & I
 
 % Network parameters
@@ -21,7 +21,7 @@ f = 0.10; % coding level
 p = 5; % # of memories
 c = 0.2; %connection prob
 Ne=8000; %8000 excitatory
-Ni=1000;  %250 inhibitory
+Ni=2000;  %250 inhibitory
 Je0=23.10;%23.10; % mV mean external drives
 Ji0=21.0;%21.0; %mV must add random noise to both
 J0std = sqrt(1);
@@ -184,6 +184,10 @@ for t=[dt:dt:T]
     xdelay(xdelay(:,1)<0,1) = 0; %flatten to zero
     
     % E Cells Presynaptic
+    uee = false(Ne,Ne);
+    xee = false(Ne,Ne);
+    kee = false(Ne,Ne);
+    kie = false(Ni,Ne);
     %presynaptic neuron j
     for j = 1:Ne
         % postsynaptic neuron i
@@ -199,6 +203,8 @@ for t=[dt:dt:T]
     
     %I Cells Presynaptic
     %presynaptic neuron j
+    kei = false(Ne,Ni);
+    kii = false(Ni,Ni);
     for j = 1:Ni
         % postsynaptic neuron i
         for i = 1:Ne
