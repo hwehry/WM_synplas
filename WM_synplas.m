@@ -20,8 +20,8 @@ tau_arp = 2; %ms for both E & I
 f = 0.10; % coding level
 p = 5; % # of memories
 c = 0.2; %connection prob
-Ne=1000; %8000 excitatory
-Ni=250;  %250 inhibitory
+Ne=8000; %8000 excitatory
+Ni=1000;  %250 inhibitory
 Je0=23.10;%23.10; % mV mean external drives
 Ji0=21.0;%21.0; %mV must add random noise to both
 J0std = sqrt(1);
@@ -50,8 +50,7 @@ Areact = 1.05;
 Tperiodic = 100; %duration of periodic reactivating signal
 Pperiodic = 250; %period of periodic reactivating signal
 Aperiodic = 1.075; %contrast factor
-
-
+nonspecificInputs = rand(Ne,1) < 0.15;
 
 %connection matrices
 % selective E-E within the same selective population: Jp
@@ -62,7 +61,7 @@ Aperiodic = 1.075; %contrast factor
 %E to E
 cEE=zeros(Ne);
 cEE_t=rand(Ne);
-cEE(cEE_t< p)=1;
+cEE(cEE_t< c)=1;
 
 % E to E J matrix
 % Es : each selective population
@@ -78,30 +77,28 @@ Jsn = Jns';
 Jsmemcell = cellfun(@double,repmat({Jp*ones(EEs,EEs)},1,p),'Un',0);
 Jsmem = blkdiag(Jsmemcell{:});
 Jss = Jb.*(Jsmem<Jp)+Jsmem;
-
 Jee = blkdiag(Jss,Jnn)+fliplr(blkdiag(Jns,Jsn));
-
 
 %E to I
 cIE=zeros(Ni,Ne);
 cIE_t=rand(Ni,Ne);
-cIE(cIE_t<p)=1;
+cIE(cIE_t<c)=1;
 
 %I to E
 cEI=zeros(Ne,Ni);
 cEI_t=rand(Ne,Ni);
-cEI(cEI_t<p)=1;
+cEI(cEI_t<c)=1;
 
 %I to I
 cII=zeros(Ni);
 cII_t=rand(Ni);
-cII(cII_t<p)=1;
+cII(cII_t<c)=1;
 
 % intial conditions
 Ve=Vre + (Vt-Vre).*rand(Ne,1);
 Vi=Vri + (Vt-Vri).*rand(Ni,1);
-u = zeros(Ne,1);
-x = zeros(Ne,1);
+u = U*ones(Ne,1);
+x = ones(Ne,1);
 
 Dee = round((rand(Ne)*4+1)*100,0); %round to .01
 Die = round((rand(Ni,Ne)*4+1)*100,0); %round to .01
@@ -110,7 +107,9 @@ Dii = round((rand(Ni)*4+1)*100,0); %round to .01
 
 delayidx = 5/.01+1;
 udelay = zeros(Ne,delayidx);
+udelay(:,1) = u;
 xdelay = zeros(Ne,delayidx);
+xdelay(:,1) = x;
 edelay = zeros(Ne,delayidx);
 idelay = zeros(Ni,delayidx);
 
@@ -120,6 +119,11 @@ spktime_e=zeros(maxspk,1);
 spkindex_e=zeros(maxspk,1);
 spktime_i=zeros(maxspk,1);
 spkindex_i=zeros(maxspk,1);
+
+% refractory period
+steps_refrac = tau_arp/dt;
+resetpenaltye = false(Ne,steps+steps_refrac);
+resetpenaltyi = false(Ni,steps+steps_refrac);
 
 counte=1;
 counti=1;
@@ -131,13 +135,14 @@ storev(1,1) = Ve(1);
 
 % time loop
 for t=[dt:dt:T]
+    idx=floor(t/dt);
     
     edelay(:,2:delayidx) = edelay(:,1:delayidx-1);
     idelay(:,2:delayidx) = idelay(:,1:delayidx-1);
-     
+    
     spke = Ve>=Vt;
     index_spke=find(spke);  %find spikers
-        
+    
     if (~isempty(index_spke))
         spktime_e(counte:counte+length(index_spke)-1)=t; %update arrays
         spkindex_e(counte:counte+length(index_spke)-1)=index_spke; %update arrays
@@ -147,7 +152,7 @@ for t=[dt:dt:T]
     
     spki = Vi>=Vt;
     index_spki=find(spki);
-       
+    
     if (~isempty(index_spki))
         spktime_i(counti:counti+length(index_spki)-1)=t;
         spkindex_i(counti:counti+length(index_spki)-1)=index_spki;
@@ -155,8 +160,12 @@ for t=[dt:dt:T]
         counti=counti+length(index_spki)+1;
     end
     
-
-   
+    %update refractory penalty box
+    timeout = idx+steps_refrac;
+    resetpenaltye(:,idx+1:timeout) = repmat(spke,1,steps_refrac) | resetpenaltye(:,idx+1:timeout) ;
+    resetpenaltyi(:,idx+1:timeout) = repmat(spki,1,steps_refrac) | resetpenaltyi(:,idx+1:timeout) ;
+    
+    
     edelay(:,1) = spke;
     idelay(:,1) = spki;
     
@@ -164,7 +173,7 @@ for t=[dt:dt:T]
     
     % %     if T <= 350
     % vector of presynaptic 'calcium' and 'neurotransmitter'
-    u = udelay(:,1);
+    u = udelay(:,1);     
     udelay(:,2:delayidx) = udelay(:,1:delayidx-1);
     udelay(:,1) = u+dt/tau_f.*(U-u)+dt*U.*(1-u).*spke;
     
@@ -205,21 +214,29 @@ for t=[dt:dt:T]
     Irecei = sum(Jei.*cEI.*kei,2);
     Irecii = sum(Jii.*cII.*kii,2);
     
-        idx=floor(t/dt);
-        storeu(idx) = u(1);
-        storex(idx) = x(1);
+    
+    storeu(idx) = u(1);
+    storex(idx) = x(1);
     
     
     Ve=Ve+Irecee-Irecei;  %spike interaction
     Vi=Vi+Irecie-Irecii;
     
-    Ve=Ve+dt/tau_mE*(-Ve+Je0+J0std*rand(Ne,1));  %E membrane integration
-    Vi=Vi+dt/tau_mI*(-Vi+Ji0+J0std*rand(Ni,1));  %I membrane integration
+    Ve=Ve+dt/tau_mE*(-Ve+Je0+J0std*rand(Ne,1)).*~resetpenaltye(:,idx);  %E membrane integration
+    Vi=Vi+dt/tau_mI*(-Vi+Ji0+J0std*rand(Ni,1)).*~resetpenaltyi(:,idx);  %I membrane integration
     
     storev(idx) = Ve(1);
     
-    progress = t/T;
-    disp(progress);
+    %selective stimulation
+    if t<350,
+        Ve(1:EEs*1) = Ve(1:EEs*1)*Acue;
+    end
+    % periodic reactivating signal
+    if ( (t > 600 && t < 700) || (t > 850 && t < 950) )
+        Ve(nonspecificInputs) = Ve(nonspecificInputs)*periodic;
+    end
+    
+    if mod(100*t,10) == 10, progress = t/T; disp(progress); end 
 end
 
 toc
