@@ -230,9 +230,10 @@ for t=[dt:dt:T]
     
     % selective stimulation
     % must add the reset here because Vre ~= 0 
-    Ancue = Acue.*~resetpenaltye(:,idx);
-    Ancue(Ancue<1) = 1;
+
     if t<350,
+        Ancue = Acue.*~resetpenaltye(:,idx);
+        Ancue(Ancue<1) = 1;
         Ve(1:EEs*1) = Ve(1:EEs*1).*Ancue(1:EEs*1);
     end
     % periodic reactivating signal
