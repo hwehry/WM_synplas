@@ -162,8 +162,9 @@ for t=[dt:dt:T]
     
     %update refractory penalty box
     timeout = idx+steps_refrac;
-    resetpenaltye(:,idx+1:timeout) = repmat(spke,1,steps_refrac) | resetpenaltye(:,idx+1:timeout) ;
-    resetpenaltyi(:,idx+1:timeout) = repmat(spki,1,steps_refrac) | resetpenaltyi(:,idx+1:timeout) ;
+    %or use idx+1 and timeout
+    resetpenaltye(:,idx:timeout-1) = repmat(spke,1,steps_refrac) | resetpenaltye(:,idx:timeout-1) ;
+    resetpenaltyi(:,idx:timeout-1) = repmat(spki,1,steps_refrac) | resetpenaltyi(:,idx:timeout-1) ;
     
     
     edelay(:,1) = spke;
@@ -219,21 +220,26 @@ for t=[dt:dt:T]
     storex(idx) = x(1);
     
     
-    Ve=Ve+Irecee-Irecei;  %spike interaction
-    Vi=Vi+Irecie-Irecii;
+    Ve=Ve+(Irecee-Irecei).*~resetpenaltye(:,idx);  %spike interaction
+    Vi=Vi+(Irecie-Irecii).*~resetpenaltyi(:,idx);
     
     Ve=Ve+dt/tau_mE*(-Ve+Je0+J0std*rand(Ne,1)).*~resetpenaltye(:,idx);  %E membrane integration
     Vi=Vi+dt/tau_mI*(-Vi+Ji0+J0std*rand(Ni,1)).*~resetpenaltyi(:,idx);  %I membrane integration
     
     storev(idx) = Ve(1);
     
-    %selective stimulation
+    % selective stimulation
+    % must add the reset here because Vre ~= 0 
+    Ancue = Acue.*~resetpenaltye(:,idx);
+    Ancue(Ancue<1) = 1;
     if t<350,
-        Ve(1:EEs*1) = Ve(1:EEs*1)*Acue;
+        Ve(1:EEs*1) = Ve(1:EEs*1).*Ancue(1:EEs*1);
     end
     % periodic reactivating signal
     if ( (t > 600 && t < 700) || (t > 850 && t < 950) )
-        Ve(nonspecificInputs) = Ve(nonspecificInputs)*periodic;
+        Anperiodic = Aperiodic.*~resetpenaltye(:,idx);
+        Anperiodic(Anperiodic<1) = 1;
+        Ve(nonspecificInputs) = Ve(nonspecificInputs).*Anperiodic;
     end
     
     if mod(100*t,10) == 10, progress = t/T; disp(progress); end 
