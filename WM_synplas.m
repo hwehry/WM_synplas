@@ -3,12 +3,12 @@
 clear all;
 
 % simulation params
-dt=0.01;
-T = 2e3;
+dt=.01;
+T = 3e3;
 steps = T/dt;
 
 % Single-cell parameters
-Vt=20;  %threshold
+Vt = 20;  %threshold
 Vre = 16;
 Vri = 13;
 tau_mE = 15; %ms for E
@@ -21,13 +21,13 @@ p = 1; % # of memories
 c = 0.2; %connection prob
 Ne=80; %8000 excitatory
 Ni=20;  %2000 inhibitory
-Je0=23.10*ones(Ne,1);%23.10; % mV mean external drives
-Ji0=21.0*ones(Ni,1);%21.0; %mV must add random noise to both
-J0std = sqrt(1);
+Je0=20.5*ones(Ne,1);%23.10; % mV mean external drives
+Ji0=20*ones(Ni,1);%21.0; %mV must add random noise to both
+J0std = sqrt(1);%sqrt(1);
 
 % Synaptic parameters
 Jie=0.135; % e --> i
-Jei=0.25; %  i --> e
+Jei=0.25;%0.25; %  i --> e
 Jii=0.20; %  i --> i
 Jb=0.10; % baseline level of EE strength
 Jp=0.45; %potentiated level of EE strength
@@ -84,18 +84,20 @@ clear cEE_r cIE_r cEI_r cII_r
 % E-E J matrix
 EEs = f*Ne; % each selective population
 EEn = Ne-p*EEs; % # non-selective population
-Jnn = rand(EEn);
-Jnn(Jnn > gamma0) = Jb;
-Jnn(Jnn < gamma0) = Jp;
-Jns = Jb.*ones(EEs*p,EEn);
-Jsn = rand(EEn,EEs*p);
-Jsn(Jsn > gamma0) = Jb;
-Jsn(Jns < gamma0) = Jp;
+Jr = rand(EEn);
+Jnn = zeros(EEn);
+Jnn(Jr > gamma0) = Jb;
+Jnn(Jr < gamma0) = Jp;
+Jns = Jb.*ones(EEn,EEs*p);
+Jr = rand(EEs*p,EEn);
+Jsn = zeros(EEs*p,EEn);
+Jsn(Jr > gamma0) = Jb;
+Jsn(Jr < gamma0) = Jp;
 % selective EE
 Jsmemcell = cellfun(@double,repmat({Jp*ones(EEs,EEs)},1,p),'Un',0);
 Jsmem = blkdiag(Jsmemcell{:});
 Jss = Jb.*(Jsmem<Jp)+Jsmem;
-Jee = blkdiag(Jss,Jnn)+fliplr(blkdiag(Jns,Jsn));
+Jee = blkdiag(Jss,Jnn)+fliplr(blkdiag(Jsn,Jns));
 
 
 % intial conditions
@@ -105,10 +107,10 @@ u = U*ones(Ne,1);
 x = ones(Ne,1);
 
 % delay matrices 1-5ms
-Dee = round((rand(Ne)*4+1)*100,0); %round to .01
-Die = round((rand(Ni,Ne)*4+1)*100,0); %round to .01
-Dei = round((rand(Ne,Ni)*4+1)*100,0); %round to .01
-Dii = round((rand(Ni)*4+1)*100,0); %round to .01
+Dee = round((rand(Ne)*4+1)*1/dt,0); %round to .01
+Die = round((rand(Ni,Ne)*4+1)*1/dt,0); %round to .01
+Dei = round((rand(Ne,Ni)*4+1)*1/dt,0); %round to .01
+Dii = round((rand(Ni)*4+1)*1/dt,0); %round to .01
 
 % % delay matrices 0.1 - 1
 % Dee = round((rand(Ne)*0.9+0.1)*100,0); %round to .01
@@ -118,7 +120,7 @@ Dii = round((rand(Ni)*4+1)*100,0); %round to .01
 
 
 
-delayidx = 5/.01+1;
+delayidx = 5/dt+1;
 udelay = ones(Ne,delayidx)*U;
 % udelay(:,1) = u;
 xdelay = ones(Ne,delayidx);
@@ -197,25 +199,20 @@ for t=[dt:dt:T]
     u = udelay(:,1);
     u = u +(dt/tau_f).*(U-u);
     udelay(:,2:delayidx) = udelay(:,1:delayidx-1);
-    udelay(:,1) =  u + dt.*U.*(1-u).*spikee;
+    udelay(:,1) =  u + U.*(1-u).*spikee;
     
     x = xdelay(:,1);
     x = x + (dt/tau_d).*(1-x);
     xdelay(:,2:delayidx) = xdelay(:,1:delayidx-1);
-    xdelay(:,1) = x - dt.*u.*x.*spikee;
+    xdelay(:,1) = x - u.*x.*spikee;
     xdelay(xdelay(:,1)<0,1) = 0; %flatten to zero
 
-
-    %     %faisals
-    %     u(i)=u(i-1)+dt*((U-u(i-1))/tau_f+U*(1-u(i-1))*kick);
-    %     x(i)=x(i-1)+dt*((1-x(i-1))/tau_d-u(i-1)*x(i-1)*kick);
-    
     
     % E Cells Presynaptic
-    uee = false(Ne,Ne);
-    xee = false(Ne,Ne);
-    kee = false(Ne,Ne);
-    kie = false(Ni,Ne);
+    uee = zeros(Ne,Ne);
+    xee = zeros(Ne,Ne);
+    kee = zeros(Ne,Ne);
+    kie = zeros(Ni,Ne);
     %presynaptic neuron j
     for j = 1:Ne
         % postsynaptic neuron i
@@ -231,8 +228,8 @@ for t=[dt:dt:T]
     
     %I Cells Presynaptic
     %presynaptic neuron j
-    kei = false(Ne,Ni);
-    kii = false(Ni,Ni);
+    kei = zeros(Ne,Ni);
+    kii = zeros(Ni,Ni);
     for j = 1:Ni
         % postsynaptic neuron i
         for i = 1:Ne
@@ -260,10 +257,10 @@ for t=[dt:dt:T]
     %external current
     Iexte = Je0+J0std*randn(Ne,1);
     Iexti = Ji0+J0std*randn(Ni,1);
-    if  t>30 && t<30+350
-        Iexte =  Iexte+Acue.*[ones(EEs*1,1);zeros(Ne-EEs*1,1)]; %Iexte.*[Acue*ones(EEs*1,1);ones(Ne-EEs*1,1)];
-    elseif ( (t > 1000 && t < 1100) || (t > 1350 && t < 1450) )
-        Iexte =  Iexte+Aperiodic.*ones(Ne,1); %Iexte.*Aperiodic.*ones(Ne,1); %
+    if  t>1000 && t<1000+350
+        Iexte =   Iexte+Acue.*[ones(EEs*1,1);zeros(Ne-EEs*1,1)]; %Iexte.*[Acue*ones(EEs*1,1);ones(Ne-EEs*1,1)];
+    elseif ( (t > 2200 && t < 2300) || (t > 2550 && t < 2650) )
+        Iexte =   Iexte+Aperiodic.*ones(Ne,1); %Iexte.*Aperiodic.*ones(Ne,1); 
     else
         Iexte = Iexte;
     end
@@ -288,10 +285,11 @@ subplot(2,1,1), plot(spiketime_e,spikeindex_e,'.k', 'MarkerSize',8); xlabel('Tim
 subplot(2,1,2), plot(spiketime_i,spikeindex_i,'.k', 'MarkerSize',8); xlabel('Time (ms)', 'fontsize', 16, 'fontweight', 'b'); ylabel('I cell index', 'fontsize', 16, 'fontweight', 'b')
 
 figure;
-plot(storex(1:end))
+plot(storex(1:idx-1))
 hold on
-plot(storeu(1:end))
+plot(storeu(1:idx-1))
 
-
+figure;
+plot(storev(1:idx-1))
 % savefile = 'WM_synplasrun_10000_add';
 % save(savefile,'spiketime_e','spikeindex_e','spiketime_i','spikeindex_i','storex','storeu');
