@@ -1,11 +1,10 @@
 
 
 clear all;
-tic
 
 % simulation params
 dt=0.01;
-T = 1e3;
+T = 2e3;
 steps = T/dt;
 
 % Single-cell parameters
@@ -13,27 +12,27 @@ Vt=20;  %threshold
 Vre = 16;
 Vri = 13;
 tau_mE = 15; %ms for E
-tau_mI = 10; %10 ms for I
+tau_mI = 10; %10 ms for I 
 tau_arp = 2; %ms for both E & I
 
 % Network parameters
 f = 0.10; % coding level
-p = 5; % # of memories
+p = 1; % # of memories
 c = 0.2; %connection prob
-Ne=8000; %8000 excitatory
-Ni=2000;  %250 inhibitory
-Je0=23.10;%23.10; % mV mean external drives
-Ji0=21.0;%21.0; %mV must add random noise to both
+Ne=800; %8000 excitatory
+Ni=200;  %2000 inhibitory
+Je0=23.10*ones(Ne,1);%23.10; % mV mean external drives
+Ji0=21.0*ones(Ni,1);%21.0; %mV must add random noise to both
 J0std = sqrt(1);
 
 % Synaptic parameters
-Jie=0.135;
-Jei=0.25; %
-Jii=0.20; %
-Jb=0.10; % baseline level of EE strenght
+Jie=0.135; % e --> i
+Jei=0.25; %  i --> e
+Jii=0.20; %  i --> i
+Jb=0.10; % baseline level of EE strength
 Jp=0.45; %potentiated level of EE strength
-gamma0=0.10; %fraction of potentiated synapses before learning
-delay=0.1;% 0.1-1ms
+gamma0=0.10; %fraction of potentiated synapses "before learning"
+delay=0.1;% synaptic delays: 0.1-1ms
 
 %short-term synaptic dynamics params
 U = 0.20; %baseline utilization factor
@@ -53,46 +52,53 @@ Aperiodic = 1.075; %contrast factor
 nonspecificInputs = rand(Ne,1) < 0.15;
 
 %connection matrices
+%E to E
+cEE=zeros(Ne);
+cEE_r=rand(Ne);
+cEE(cEE_r< c)=1;
+
+%E to I
+cIE=zeros(Ni,Ne);
+cIE_r=rand(Ni,Ne);
+cIE(cIE_r<c)=1;
+
+%I to E
+cEI=zeros(Ne,Ni);
+cEI_r=rand(Ne,Ni);
+cEI(cEI_r<c)=1;
+
+%I to I
+cII=zeros(Ni);
+cII_r=rand(Ni);
+cII(cII_r<c)=1;
+clear cEE_r cIE_r cEI_r cII_r
+
+% J matrix for E-E cells
+
 % selective E-E within the same selective population: Jp
 % selective E-E between different selective populations: Jb
 % non-selective E-E to selective and non-selective to non-selevective: Jp
-% wp 0.1
+% w.p. 0.1, o.w. Jb
 
-%E to E
-cEE=zeros(Ne);
-cEE_t=rand(Ne);
-cEE(cEE_t< c)=1;
-
-% E to E J matrix
-% Es : each selective population
-% En : non-selective pop
-EEs = f*Ne; % selective
-EEn = Ne-p*EEs; % # non-selective
+%code is written for one memory
+% E-E J matrix
+EEs = f*Ne; % each selective population
+EEn = Ne-p*EEs; % # non-selective population
 Jnn = rand(EEn);
 Jnn(Jnn > gamma0) = Jb;
 Jnn(Jnn < gamma0) = Jp;
-Jns = ones(EEs*p,EEn).*Jb;
-Jsn = Jns';
+Jns = rand(EEs*p,EEn);
+Jns(Jns > gamma0) = Jb;
+Jns(Jns < gamma0) = Jp;
+Jsn = rand(EEn,EEs*p);
+Jsn(Jsn > gamma0) = Jb;
+Jns(Jns < gamma0) = Jp;
 % selective EE
 Jsmemcell = cellfun(@double,repmat({Jp*ones(EEs,EEs)},1,p),'Un',0);
 Jsmem = blkdiag(Jsmemcell{:});
 Jss = Jb.*(Jsmem<Jp)+Jsmem;
 Jee = blkdiag(Jss,Jnn)+fliplr(blkdiag(Jns,Jsn));
 
-%E to I
-cIE=zeros(Ni,Ne);
-cIE_t=rand(Ni,Ne);
-cIE(cIE_t<c)=1;
-
-%I to E
-cEI=zeros(Ne,Ni);
-cEI_t=rand(Ne,Ni);
-cEI(cEI_t<c)=1;
-
-%I to I
-cII=zeros(Ni);
-cII_t=rand(Ni);
-cII(cII_t<c)=1;
 
 % intial conditions
 Ve=Vre + (Vt-Vre).*rand(Ne,1);
@@ -100,25 +106,34 @@ Vi=Vri + (Vt-Vri).*rand(Ni,1);
 u = U*ones(Ne,1);
 x = ones(Ne,1);
 
+% delay matrices 1-5ms
 Dee = round((rand(Ne)*4+1)*100,0); %round to .01
 Die = round((rand(Ni,Ne)*4+1)*100,0); %round to .01
 Dei = round((rand(Ne,Ni)*4+1)*100,0); %round to .01
 Dii = round((rand(Ni)*4+1)*100,0); %round to .01
 
+% % delay matrices 0.1 - 1 
+% Dee = round((rand(Ne)*0.9+0.1)*100,0); %round to .01
+% Die = round((rand(Ni,Ne)*0.9+0.1)*100,0); %round to .01
+% Dei = round((rand(Ne,Ni)*0.9+0.1)*100,0); %round to .01
+% Dii = round((rand(Ni)*0.9+0.1)*100,0); %round to .01
+
+
+
 delayidx = 5/.01+1;
-udelay = zeros(Ne,delayidx);
-udelay(:,1) = u;
-xdelay = zeros(Ne,delayidx);
-xdelay(:,1) = x;
+udelay = ones(Ne,delayidx)*U;
+% udelay(:,1) = u;
+xdelay = ones(Ne,delayidx);
+% xdelay(:,1) = x;
 edelay = zeros(Ne,delayidx);
 idelay = zeros(Ni,delayidx);
 
 % spiketime arrays
-maxspk=100000;
-spktime_e=zeros(maxspk,1);
-spkindex_e=zeros(maxspk,1);
-spktime_i=zeros(maxspk,1);
-spkindex_i=zeros(maxspk,1);
+maxspike=100000;
+spiketime_e=zeros(maxspike,1);
+spikeindex_e=zeros(maxspike,1);
+spiketime_i=zeros(maxspike,1);
+spikeindex_i=zeros(maxspike,1);
 
 % refractory period
 steps_refrac = tau_arp/dt;
@@ -134,54 +149,56 @@ storev = zeros(steps,1);
 storev(1,1) = Ve(1);
 
 % time loop
+idx = 1;
 for t=[dt:dt:T]
-    idx=floor(t/dt);
     
     edelay(:,2:delayidx) = edelay(:,1:delayidx-1);
     idelay(:,2:delayidx) = idelay(:,1:delayidx-1);
     
-    spke = Ve>=Vt;
-    index_spke=find(spke);  %find spikers
+    spikee = Ve>=Vt;
+    index_spike=find(spikee);  %find spiking neurons
     
-    if (~isempty(index_spke))
-        spktime_e(counte:counte+length(index_spke)-1)=t; %update arrays
-        spkindex_e(counte:counte+length(index_spke)-1)=index_spke; %update arrays
-        Ve(index_spke)=Vre;  %reset
-        counte=counte+length(index_spke)+1;
+    if (~isempty(index_spike))
+        spiketime_e(counte:counte+length(index_spike)-1)=t; %update 
+        spikeindex_e(counte:counte+length(index_spike)-1)=index_spike; %update 
+        Ve(index_spike)=Vre;  %reset
+        counte=counte+length(index_spike)+1;
     end
     
-    spki = Vi>=Vt;
-    index_spki=find(spki);
+    spikei = Vi>=Vt;
+    index_spikei=find(spikei);
     
-    if (~isempty(index_spki))
-        spktime_i(counti:counti+length(index_spki)-1)=t;
-        spkindex_i(counti:counti+length(index_spki)-1)=index_spki;
-        Vi(index_spki)=Vri;
-        counti=counti+length(index_spki)+1;
+    if (~isempty(index_spikei))
+        spiketime_i(counti:counti+length(index_spikei)-1)=t;
+        spikeindex_i(counti:counti+length(index_spikei)-1)=index_spikei;
+        Vi(index_spikei)=Vri;
+        counti=counti+length(index_spikei)+1;
     end
     
     %update refractory penalty box
     timeout = idx+steps_refrac;
     %or use idx+1 and timeout
-    resetpenaltye(:,idx:timeout-1) = repmat(spke,1,steps_refrac) | resetpenaltye(:,idx:timeout-1) ;
-    resetpenaltyi(:,idx:timeout-1) = repmat(spki,1,steps_refrac) | resetpenaltyi(:,idx:timeout-1) ;
+    resetpenaltye(:,idx:timeout-1) = repmat(spikee,1,steps_refrac) | resetpenaltye(:,idx:timeout-1) ;
+    resetpenaltyi(:,idx:timeout-1) = repmat(spikei,1,steps_refrac) | resetpenaltyi(:,idx:timeout-1) ;
     
     
-    edelay(:,1) = spke;
-    idelay(:,1) = spki;
+    edelay(:,1) = spikee;
+    idelay(:,1) = spikei;
     
-    
-    
-    % %     if T <= 350
     % vector of presynaptic 'calcium' and 'neurotransmitter'
     u = udelay(:,1);     
     udelay(:,2:delayidx) = udelay(:,1:delayidx-1);
-    udelay(:,1) = u+dt/tau_f.*(U-u)+dt*U.*(1-u).*spke;
+    udelay(:,1) = u + (dt/tau_f).*(U-u) + dt*U.*(1-u).*spikee;
     
     x = xdelay(:,1);
     xdelay(:,2:delayidx) = xdelay(:,1:delayidx-1);
-    xdelay(:,1) = x+dt/tau_d.*(1-x)-dt*u.*x.*spke;
+    xdelay(:,1) = x + (dt/tau_d).*(1-x) - dt*u.*x.*spikee;
     xdelay(xdelay(:,1)<0,1) = 0; %flatten to zero
+    
+%     %faisals
+%     u(i)=u(i-1)+dt*((U-u(i-1))/tau_f+U*(1-u(i-1))*kick);
+%     x(i)=x(i-1)+dt*((1-x(i-1))/tau_d-u(i-1)*x(i-1)*kick);
+    
     
     % E Cells Presynaptic
     uee = false(Ne,Ne);
@@ -222,45 +239,48 @@ for t=[dt:dt:T]
     Irecii = sum(Jii.*cII.*kii,2);
     
     
-    storeu(idx) = u(1);
-    storex(idx) = x(1);
+    storeu(idx) = mean(udelay(1:EEs,1)); 
+    storex(idx) = mean(xdelay(1:EEs,1)); 
     
     
-    Ve=Ve+(Irecee-Irecei).*~resetpenaltye(:,idx);  %spike interaction
-    Vi=Vi+(Irecie-Irecii).*~resetpenaltyi(:,idx);
+     Ve=Ve+(Irecee-Irecei).*~resetpenaltye(:,idx);  %spike interaction
+     Vi=Vi+(Irecie-Irecii).*~resetpenaltyi(:,idx);
     
-    Ve=Ve+dt/tau_mE*(-Ve+Je0+J0std*rand(Ne,1)).*~resetpenaltye(:,idx);  %E membrane integration
-    Vi=Vi+dt/tau_mI*(-Vi+Ji0+J0std*rand(Ni,1)).*~resetpenaltyi(:,idx);  %I membrane integration
+     %external current
+     Iexte = Je0+J0std*randn(Ne,1);
+     Iexti = Ji0+J0std*randn(Ni,1);
+     if  t>30 && t<30+350
+         Iexte =  Iexte+Acue.*[ones(EEs*1,1);zeros(Ne-EEs*1,1)]; %Iexte.*[Acue*ones(EEs*1,1);ones(Ne-EEs*1,1)]; 
+     elseif ( (t > 1000 && t < 1100) || (t > 1250 && t < 1350) )
+         Iexte =  Iexte+Aperiodic.*ones(Ne,1); %Iexte.*Aperiodic.*ones(Ne,1); %
+     else
+         Iexte = Iexte;
+     end
+     
+    Ve=Ve+dt/tau_mE*(-Ve+Iexte).*~resetpenaltye(:,idx);  %E membrane integration
+    Vi=Vi+dt/tau_mI*(-Vi+Iexti).*~resetpenaltyi(:,idx);  %I membrane integration
     
     storev(idx) = Ve(1);
     
     % selective stimulation
     % must add the reset here because Vre ~= 0 
-
-    if t<350,
-        Ancue = Acue.*~resetpenaltye(:,idx);
-        Ancue(Ancue<1) = 1;
-        Ve(1:EEs*1) = Ve(1:EEs*1).*Ancue(1:EEs*1);
-    end
-    % periodic reactivating signal
-    if ( (t > 600 && t < 700) || (t > 850 && t < 950) )
-        Anperiodic = Aperiodic.*~resetpenaltye(:,idx);
-        Anperiodic(Anperiodic<1) = 1;
-        Ve(nonspecificInputs) = Ve(nonspecificInputs).*Anperiodic;
-    end
     
-    if mod(100*t,10) == 10, progress = t/T; disp(progress); end 
+%     if mod(100*t,1) == 1, progress = t/T; disp(progress); end 
+idx = idx+1;
 end
 
-toc
+
 
 figure;
 
-subplot(2,1,1), plot(spktime_e,spkindex_e,'.k', 'MarkerSize',8); xlabel('Time (ms)', 'fontsize', 16, 'fontweight', 'b'); ylabel('E cell index', 'fontsize', 16, 'fontweight', 'b')
-subplot(2,1,2), plot(spktime_i,spkindex_i,'.k', 'MarkerSize',8); xlabel('Time (ms)', 'fontsize', 16, 'fontweight', 'b'); ylabel('I cell index', 'fontsize', 16, 'fontweight', 'b')
+subplot(2,1,1), plot(spiketime_e,spikeindex_e,'.k', 'MarkerSize',8); xlabel('Time (ms)', 'fontsize', 16, 'fontweight', 'b'); ylabel('E cell index', 'fontsize', 16, 'fontweight', 'b')
+subplot(2,1,2), plot(spiketime_i,spikeindex_i,'.k', 'MarkerSize',8); xlabel('Time (ms)', 'fontsize', 16, 'fontweight', 'b'); ylabel('I cell index', 'fontsize', 16, 'fontweight', 'b')
+
+figure;
+plot(storex(1:end))
+hold on
+plot(storeu(1:end))
 
 
-
-
-
-
+% savefile = 'WM_synplasrun_10000_add';
+% save(savefile,'spiketime_e','spikeindex_e','spiketime_i','spikeindex_i','storex','storeu');
