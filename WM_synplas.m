@@ -12,15 +12,15 @@ Vt=20;  %threshold
 Vre = 16;
 Vri = 13;
 tau_mE = 15; %ms for E
-tau_mI = 10; %10 ms for I 
+tau_mI = 10; %10 ms for I
 tau_arp = 2; %ms for both E & I
 
 % Network parameters
 f = 0.10; % coding level
 p = 1; % # of memories
 c = 0.2; %connection prob
-Ne=800; %8000 excitatory
-Ni=200;  %2000 inhibitory
+Ne=80; %8000 excitatory
+Ni=20;  %2000 inhibitory
 Je0=23.10*ones(Ne,1);%23.10; % mV mean external drives
 Ji0=21.0*ones(Ni,1);%21.0; %mV must add random noise to both
 J0std = sqrt(1);
@@ -87,12 +87,10 @@ EEn = Ne-p*EEs; % # non-selective population
 Jnn = rand(EEn);
 Jnn(Jnn > gamma0) = Jb;
 Jnn(Jnn < gamma0) = Jp;
-Jns = rand(EEs*p,EEn);
-Jns(Jns > gamma0) = Jb;
-Jns(Jns < gamma0) = Jp;
+Jns = Jb.*ones(EEs*p,EEn);
 Jsn = rand(EEn,EEs*p);
 Jsn(Jsn > gamma0) = Jb;
-Jns(Jns < gamma0) = Jp;
+Jsn(Jns < gamma0) = Jp;
 % selective EE
 Jsmemcell = cellfun(@double,repmat({Jp*ones(EEs,EEs)},1,p),'Un',0);
 Jsmem = blkdiag(Jsmemcell{:});
@@ -112,7 +110,7 @@ Die = round((rand(Ni,Ne)*4+1)*100,0); %round to .01
 Dei = round((rand(Ne,Ni)*4+1)*100,0); %round to .01
 Dii = round((rand(Ni)*4+1)*100,0); %round to .01
 
-% % delay matrices 0.1 - 1 
+% % delay matrices 0.1 - 1
 % Dee = round((rand(Ne)*0.9+0.1)*100,0); %round to .01
 % Die = round((rand(Ni,Ne)*0.9+0.1)*100,0); %round to .01
 % Dei = round((rand(Ne,Ni)*0.9+0.1)*100,0); %round to .01
@@ -159,8 +157,8 @@ for t=[dt:dt:T]
     index_spike=find(spikee);  %find spiking neurons
     
     if (~isempty(index_spike))
-        spiketime_e(counte:counte+length(index_spike)-1)=t; %update 
-        spikeindex_e(counte:counte+length(index_spike)-1)=index_spike; %update 
+        spiketime_e(counte:counte+length(index_spike)-1)=t; %update
+        spikeindex_e(counte:counte+length(index_spike)-1)=index_spike; %update
         Ve(index_spike)=Vre;  %reset
         counte=counte+length(index_spike)+1;
     end
@@ -186,18 +184,31 @@ for t=[dt:dt:T]
     idelay(:,1) = spikei;
     
     % vector of presynaptic 'calcium' and 'neurotransmitter'
-    u = udelay(:,1);     
+%     u = udelay(:,1);
+%     udelay(:,2:delayidx) = udelay(:,1:delayidx-1);
+%     udelay(:,1) = u + (dt/tau_f).*(U-u) + dt*U.*(1-u).*spikee;
+%     
+%     x = xdelay(:,1);
+%     xdelay(:,2:delayidx) = xdelay(:,1:delayidx-1);
+%     xdelay(:,1) = x + (dt/tau_d).*(1-x) - dt*u.*x.*spikee;
+%     xdelay(xdelay(:,1)<0,1) = 0; %flatten to zero
+    
+    % the functions multiplying the spike train must be evaulated first
+    u = udelay(:,1);
+    u = u +(dt/tau_f).*(U-u);
     udelay(:,2:delayidx) = udelay(:,1:delayidx-1);
-    udelay(:,1) = u + (dt/tau_f).*(U-u) + dt*U.*(1-u).*spikee;
+    udelay(:,1) =  u + dt.*U.*(1-u).*spikee;
     
     x = xdelay(:,1);
+    x = x + (dt/tau_d).*(1-x);
     xdelay(:,2:delayidx) = xdelay(:,1:delayidx-1);
-    xdelay(:,1) = x + (dt/tau_d).*(1-x) - dt*u.*x.*spikee;
+    xdelay(:,1) = x - dt.*u.*x.*spikee;
     xdelay(xdelay(:,1)<0,1) = 0; %flatten to zero
-    
-%     %faisals
-%     u(i)=u(i-1)+dt*((U-u(i-1))/tau_f+U*(1-u(i-1))*kick);
-%     x(i)=x(i-1)+dt*((1-x(i-1))/tau_d-u(i-1)*x(i-1)*kick);
+
+
+    %     %faisals
+    %     u(i)=u(i-1)+dt*((U-u(i-1))/tau_f+U*(1-u(i-1))*kick);
+    %     x(i)=x(i-1)+dt*((1-x(i-1))/tau_d-u(i-1)*x(i-1)*kick);
     
     
     % E Cells Presynaptic
@@ -239,34 +250,34 @@ for t=[dt:dt:T]
     Irecii = sum(Jii.*cII.*kii,2);
     
     
-    storeu(idx) = mean(udelay(1:EEs,1)); 
-    storex(idx) = mean(xdelay(1:EEs,1)); 
+    storeu(idx) = udelay(1,1);%mean(udelay(1:EEs,1));
+    storex(idx) = xdelay(1,1);%mean(xdelay(1:EEs,1));
     
     
-     Ve=Ve+(Irecee-Irecei).*~resetpenaltye(:,idx);  %spike interaction
-     Vi=Vi+(Irecie-Irecii).*~resetpenaltyi(:,idx);
+    Ve=Ve+(Irecee-Irecei).*~resetpenaltye(:,idx);  %spike interaction
+    Vi=Vi+(Irecie-Irecii).*~resetpenaltyi(:,idx);
     
-     %external current
-     Iexte = Je0+J0std*randn(Ne,1);
-     Iexti = Ji0+J0std*randn(Ni,1);
-     if  t>30 && t<30+350
-         Iexte =  Iexte+Acue.*[ones(EEs*1,1);zeros(Ne-EEs*1,1)]; %Iexte.*[Acue*ones(EEs*1,1);ones(Ne-EEs*1,1)]; 
-     elseif ( (t > 1000 && t < 1100) || (t > 1250 && t < 1350) )
-         Iexte =  Iexte+Aperiodic.*ones(Ne,1); %Iexte.*Aperiodic.*ones(Ne,1); %
-     else
-         Iexte = Iexte;
-     end
-     
+    %external current
+    Iexte = Je0+J0std*randn(Ne,1);
+    Iexti = Ji0+J0std*randn(Ni,1);
+    if  t>30 && t<30+350
+        Iexte =  Iexte+Acue.*[ones(EEs*1,1);zeros(Ne-EEs*1,1)]; %Iexte.*[Acue*ones(EEs*1,1);ones(Ne-EEs*1,1)];
+    elseif ( (t > 1000 && t < 1100) || (t > 1350 && t < 1450) )
+        Iexte =  Iexte+Aperiodic.*ones(Ne,1); %Iexte.*Aperiodic.*ones(Ne,1); %
+    else
+        Iexte = Iexte;
+    end
+    
     Ve=Ve+dt/tau_mE*(-Ve+Iexte).*~resetpenaltye(:,idx);  %E membrane integration
     Vi=Vi+dt/tau_mI*(-Vi+Iexti).*~resetpenaltyi(:,idx);  %I membrane integration
     
     storev(idx) = Ve(1);
     
     % selective stimulation
-    % must add the reset here because Vre ~= 0 
+    % must add the reset here because Vre ~= 0
     
-%     if mod(100*t,1) == 1, progress = t/T; disp(progress); end 
-idx = idx+1;
+    %     if mod(100*t,1) == 1, progress = t/T; disp(progress); end
+    idx = idx+1;
 end
 
 
