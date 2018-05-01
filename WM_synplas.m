@@ -1,3 +1,6 @@
+% MATH 3370 final project: synaptic theory of working memory
+% recurrent LIF network with modeled calcium and neurotransmitter dynamics
+% Hillary Wehry, May 1, 2018
 
 
 clear all;
@@ -19,10 +22,10 @@ tau_arp = 2; %ms for both E & I
 f = 0.10; % coding level
 p = 1; % # of memories
 c = 0.2; %connection prob
-Ne=80; %8000 excitatory
-Ni=20;  %2000 inhibitory
-Je0=20.5*ones(Ne,1);%23.10; % mV mean external drives
-Ji0=20*ones(Ni,1);%21.0; %mV must add random noise to both
+Ne=8000; %8000 excitatory
+Ni=2000;  %2000 inhibitory
+Je0=23.1*ones(Ne,1);%20.5 %23.10; % mV mean external drives
+Ji0=21.0*ones(Ni,1);%20 %21.0; %mV must add random noise to both
 J0std = sqrt(1);%sqrt(1);
 
 % Synaptic parameters
@@ -112,14 +115,6 @@ Die = round((rand(Ni,Ne)*4+1)*1/dt,0); %round to .01
 Dei = round((rand(Ne,Ni)*4+1)*1/dt,0); %round to .01
 Dii = round((rand(Ni)*4+1)*1/dt,0); %round to .01
 
-% % delay matrices 0.1 - 1
-% Dee = round((rand(Ne)*0.9+0.1)*100,0); %round to .01
-% Die = round((rand(Ni,Ne)*0.9+0.1)*100,0); %round to .01
-% Dei = round((rand(Ne,Ni)*0.9+0.1)*100,0); %round to .01
-% Dii = round((rand(Ni)*0.9+0.1)*100,0); %round to .01
-
-
-
 delayidx = 5/dt+1;
 udelay = ones(Ne,delayidx)*U;
 % udelay(:,1) = u;
@@ -152,7 +147,7 @@ storev(1,1) = Ve(1);
 idx = 1;
 for t=[dt:dt:T]
     
-    edelay(:,2:delayidx) = edelay(:,1:delayidx-1);
+    edelay(:,2:delayidx) = edelay(:,1:delayidx-1); %shift delayed spike train
     idelay(:,2:delayidx) = idelay(:,1:delayidx-1);
     
     spikee = Ve>=Vt;
@@ -169,9 +164,9 @@ for t=[dt:dt:T]
     index_spikei=find(spikei);
     
     if (~isempty(index_spikei))
-        spiketime_i(counti:counti+length(index_spikei)-1)=t;
-        spikeindex_i(counti:counti+length(index_spikei)-1)=index_spikei;
-        Vi(index_spikei)=Vri;
+        spiketime_i(counti:counti+length(index_spikei)-1)=t; %update
+        spikeindex_i(counti:counti+length(index_spikei)-1)=index_spikei; %update
+        Vi(index_spikei)=Vri; %reset
         counti=counti+length(index_spikei)+1;
     end
     
@@ -182,19 +177,10 @@ for t=[dt:dt:T]
     resetpenaltyi(:,idx:timeout-1) = repmat(spikei,1,steps_refrac) | resetpenaltyi(:,idx:timeout-1) ;
     
     
-    edelay(:,1) = spikee;
+    edelay(:,1) = spikee; 
     idelay(:,1) = spikei;
     
     % vector of presynaptic 'calcium' and 'neurotransmitter'
-%     u = udelay(:,1);
-%     udelay(:,2:delayidx) = udelay(:,1:delayidx-1);
-%     udelay(:,1) = u + (dt/tau_f).*(U-u) + dt*U.*(1-u).*spikee;
-%     
-%     x = xdelay(:,1);
-%     xdelay(:,2:delayidx) = xdelay(:,1:delayidx-1);
-%     xdelay(:,1) = x + (dt/tau_d).*(1-x) - dt*u.*x.*spikee;
-%     xdelay(xdelay(:,1)<0,1) = 0; %flatten to zero
-    
     % the functions multiplying the spike train must be evaulated first
     u = udelay(:,1);
     u = u +(dt/tau_f).*(U-u);
@@ -246,15 +232,10 @@ for t=[dt:dt:T]
     Irecei = sum(Jei.*cEI.*kei,2);
     Irecii = sum(Jii.*cII.*kii,2);
     
-    
-    storeu(idx) = udelay(1,1);%mean(udelay(1:EEs,1));
-    storex(idx) = xdelay(1,1);%mean(xdelay(1:EEs,1));
-    
-    
     Ve=Ve+(Irecee-Irecei).*~resetpenaltye(:,idx);  %spike interaction
     Vi=Vi+(Irecie-Irecii).*~resetpenaltyi(:,idx);
     
-    %external current
+    %external current with time-dependent stimulation
     Iexte = Je0+J0std*randn(Ne,1);
     Iexti = Ji0+J0std*randn(Ni,1);
     if  t>1000 && t<1000+350
@@ -268,12 +249,11 @@ for t=[dt:dt:T]
     Ve=Ve+dt/tau_mE*(-Ve+Iexte).*~resetpenaltye(:,idx);  %E membrane integration
     Vi=Vi+dt/tau_mI*(-Vi+Iexti).*~resetpenaltyi(:,idx);  %I membrane integration
     
+    % save variables
     storev(idx) = Ve(1);
-    
-    % selective stimulation
-    % must add the reset here because Vre ~= 0
-    
-    %     if mod(100*t,1) == 1, progress = t/T; disp(progress); end
+    storeu(idx) = udelay(1,1);%mean(udelay(1:EEs,1));
+    storex(idx) = xdelay(1,1);%mean(xdelay(1:EEs,1));
+        
     idx = idx+1;
 end
 
